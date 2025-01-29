@@ -1,0 +1,92 @@
+# Node.js with Angular
+# Build a Node.js project that uses Angular.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
+
+trigger:
+- main
+
+pool:
+  name: 'Default'
+  demands:
+    - agent.name -equals JUAN-JARAMILLO
+
+variables:
+  - group: AWS_CREDENTIALS
+  - name: 'S3_BUCKET_NAME'
+    value: 'azure-devops-bucket-s3'
+  - name: 'AWS_REGION'
+    value: 'us-east-1'
+  - name: 'AZP_AGENT_CLEANUP_PSMODULES_IN_POWERSHELL'
+    value: 'true'
+
+steps:
+# Paso : Imprimir el PATH
+- powershell: |
+    Write-Host "📂-📂 Current PATH: $env:Path"
+  displayName: '🔍 Print paths'
+
+# Paso : Instalar Node.js
+- task: NodeTool@0
+  inputs:
+    versionSpec: '20.x'
+  displayName: '📦 Install Node.js'
+
+# Paso : Instalar AWS CLI (opcional, solo si necesitas AWS CLI para otros pasos)
+- script: |
+    Invoke-WebRequest -Uri "https://awscli.amazonaws.com/AWSCLIV2.msi" -OutFile "$env:TEMP\AWSCLIV2.msi"
+    Start-Process msiexec.exe -ArgumentList '/i "$env:TEMP\AWSCLIV2.msi" /quiet /norestart' -NoNewWindow -Wait
+    $env:Path += ";C:\Program Files\Amazon\AWSCLIV2\"
+    aws --version
+  displayName: '✅ Verificar e instalar AWS CLI'
+
+
+# Paso : Instalar Angular CLI y dependencias y Construir la aplicación `micro-front`
+- script: |
+    npm install -g @angular/cli
+    npm install
+    ng build
+  displayName: '🛠️ npm install and build'
+
+# Paso : Instalar ngx-build-plus
+- script: |
+    npm install ngx-build-plus --save-dev
+  displayName: 'Instalar ngx-build-plus'
+
+# - powershell: |
+#     Write-Host "AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)"
+#     Write-Host "AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)"
+#   displayName: '🔍 Verificar credenciales de AWS'
+
+# - script: |
+#     amplify --version
+#   displayName: '🔍 Verificar versión de Amplify CLI'
+
+# - script: |
+#     amplify init --yes \
+#       --amplify "{\"projectName\":\"mfe1\",\"envName\":\"dev\",\"defaultEditor\":\"code\"}" \
+#       --frontend "{\"frontend\":\"javascript\",\"framework\":\"angular\",\"config\":{\"SourceDir\":\"src\",\"DistributionDir\":\"dist/mfe1\",\"BuildCommand\":\"npm run build\",\"StartCommand\":\"ng serve\"}}" \
+#       --providers "{\"awscloudformation\":{\"configLevel\":\"project\",\"useProfile\":false,\"accessKeyId\":\"$(AWS_ACCESS_KEY_ID)\",\"secretAccessKey\":\"$(AWS_SECRET_ACCESS_KEY)\",\"region\":\"$(AWS_REGION)\"}}"
+#   displayName: 'Inicializar Amplify en modo headless'
+
+# - script: |
+#     amplify add hosting --yes --plugin-module Hosting --hosting-type Manual
+#   displayName: 'Configurar hosting en Amplify'
+
+- powershell: |
+    amplify pull --yes --appId "d1or9qemkeojg0" --envName "dev"
+  displayName: '🔄 Restaurar entorno de Amplify'
+
+
+- powershell: |
+    amplify status
+  displayName: '🔍 Verificar estado de Amplify'
+
+# - powershell: |
+#     Write-Host "📂 Verificando archivos de Amplify..."
+#     Get-ChildItem -Path . -Recurse
+#   displayName: '🔍 Verificar estructura de archivos'
+
+- script: |
+    amplify publish --yes
+  displayName: '🚀 Publicar cambios en AWS Amplify'
